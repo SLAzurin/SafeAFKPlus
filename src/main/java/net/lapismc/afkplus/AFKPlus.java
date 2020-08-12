@@ -35,9 +35,16 @@ import org.ocpsoft.prettytime.units.JustNow;
 import org.ocpsoft.prettytime.units.Millisecond;
 
 import java.util.HashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.logging.Level;
+import net.lapismc.afkplus.commands.DisableAFK;
+import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scoreboard.Scoreboard;
+import org.bukkit.scoreboard.ScoreboardManager;
+import org.bukkit.scoreboard.Team;
 
 public final class AFKPlus extends LapisCorePlugin {
 
@@ -61,21 +68,27 @@ public final class AFKPlus extends LapisCorePlugin {
         prettyTime.removeUnit(Millisecond.class);
         new AFK(this);
         new AFKPlusCmd(this);
+        new DisableAFK(this);
         listeners = new AFKPlusListeners(this);
         new AFKPlusAPI(this);
         new AFKPlusPlayerAPI(this);
         new Metrics(this);
         repeatingTask = Bukkit.getScheduler().runTaskTimerAsynchronously(this, runRepeatingTasks(), 20, 20);
         getLogger().info(getName() + " v." + getDescription().getVersion() + " has been enabled!");
+        
+        
+        createAFKTeamIfNotExists();
     }
 
     @Override
     public void onDisable() {
+        disableAFKAllPlayers();
+        
         fileWatcher.stop();
         //Stop the AFK repeating task
         repeatingTask.cancel();
         //Also stop the AFK Machine detection task
-        listeners.getAfkMachineDetectionTask().cancel();
+//        listeners.getAfkMachineDetectionTask().cancel();
         getLogger().info(getName() + " has been disabled!");
     }
 
@@ -91,7 +104,7 @@ public final class AFKPlus extends LapisCorePlugin {
     }
 
     private void update() {
-        updater = new LapisUpdater(this, "AFKPlus", "Dart2112", "AFKPlus", "master");
+        updater = new LapisUpdater(this, "AFKPlus", "SLAzurin", "SafeAFKPlus", "master");
         if (updater.checkUpdate()) {
             if (getConfig().getBoolean("UpdateDownload")) {
                 updater.downloadUpdate();
@@ -109,6 +122,44 @@ public final class AFKPlus extends LapisCorePlugin {
                 player.getRepeatingTask().run();
             }
         };
+    }
+
+    private void disableAFKAllPlayers() {
+        this.players.entrySet().forEach((player) -> {
+            AFKPlusPlayer afkp = player.getValue();
+            if (afkp.isAFK()) {
+                afkp.forceStopAFK();
+            }
+        });
+    }
+
+    private void createAFKTeamIfNotExists() {
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                ScoreboardManager manager = Bukkit.getScoreboardManager();
+                if (manager == null) {
+                    throw new IllegalStateException("No world loaded");
+                }
+                Scoreboard main = manager.getMainScoreboard();
+                try {
+                    
+                    Team t = main.registerNewTeam("afk_plugin");
+                    t.setOption(Team.Option.COLLISION_RULE, Team.OptionStatus.NEVER);
+                    getLogger().log(Level.INFO, "{0} Created team afk_plugin", getName());
+                } catch (IllegalArgumentException e) {
+                    // Team already exists.
+                }
+                
+//                try {
+//                    Team t = main.registerNewTeam("not_afk_plugin");
+//                    t.setOption(Team.Option.COLLISION_RULE, Team.OptionStatus.ALWAYS);
+//                    getLogger().log(Level.INFO, "{0} Created team not_afk_plugin", getName());
+//                } catch (IllegalArgumentException e) {
+//                    // Team already exists.
+//                }
+            }
+        }.runTaskLater(this, 1L);
     }
 
     public List<Duration> reduceDurationList(List<Duration> durationList) {

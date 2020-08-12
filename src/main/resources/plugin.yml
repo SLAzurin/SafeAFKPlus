@@ -1,6 +1,6 @@
 name: AFKPlus
 version: ${project.version}
 main: net.lapismc.afkplus.AFKPlus
-api-version: 1.13
-authors: [Dart2112]
-description: AFK for professional servers
+api-version: 1.16
+authors: [Dart2112, Azurin]
+description: "SafeAFK: to prevent accidental deaths when you're not looking at your screen"

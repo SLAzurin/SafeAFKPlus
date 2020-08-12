@@ -48,6 +48,11 @@ public class AFK extends AFKPlusCommand {
                 return;
             }
             //Toggle their AFK status
+            if (player.isDisabled()) {
+                sender.sendMessage("You will now be protected while AFK.");
+            }
+            player.setDisabled(false);
+            
             toggleAFK(player);
         } else if (args.length == 1) {
             // /afk [PlayerName]
@@ -64,6 +69,13 @@ public class AFK extends AFKPlusCommand {
                 return;
             }
             //Get the player and toggle their AFK status
+            AFKPlusPlayer afkp = this.getPlayer(op);
+            // if the other player's safe afk is off
+            if (afkp.isDisabled()) {
+                sender.sendMessage(afkp.getName() + " will now be protected while AFK.");
+                ((Player) op).sendMessage(sender.getName() + " set you in SafeAFK mode.");
+            }
+            afkp.setDisabled(false);
             toggleAFK(getPlayer(op));
         } else {
             sendMessage(sender, "Help.AFK");

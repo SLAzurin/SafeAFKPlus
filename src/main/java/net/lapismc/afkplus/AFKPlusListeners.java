@@ -16,6 +16,7 @@
 
 package net.lapismc.afkplus;
 
+import net.lapismc.afkplus.playerdata.AFKPlusPlayer;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -25,20 +26,19 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.player.*;
-import org.bukkit.scheduler.BukkitTask;
 
-import java.util.HashMap;
-import java.util.UUID;
+import org.bukkit.entity.HumanEntity;
+import org.bukkit.event.inventory.InventoryCreativeEvent;
 
 class AFKPlusListeners implements Listener {
 
     private final AFKPlus plugin;
-    private final HashMap<UUID, Location> playerLocations = new HashMap<>();
-    private BukkitTask AfkMachineDetectionTask;
+//    private final HashMap<UUID, Location> playerLocations = new HashMap<>();
+//    private BukkitTask AfkMachineDetectionTask;
 
     AFKPlusListeners(AFKPlus plugin) {
         this.plugin = plugin;
-        startRunnable();
+//        startRunnable();
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
@@ -56,6 +56,20 @@ class AFKPlusListeners implements Listener {
     public void onPlayerChat(AsyncPlayerChatEvent e) {
         if (plugin.getConfig().getBoolean("EnabledDetections.Chat")) {
             Bukkit.getScheduler().runTask(plugin, () -> plugin.getPlayer(e.getPlayer()).interact());
+        }
+    }
+    
+    @EventHandler
+    public void onInventoryCreativeEvent(InventoryCreativeEvent e) {
+//        getLogger().info("onInventoryMoveItemEvent");
+        HumanEntity hE = e.getWhoClicked();
+        if (!(hE instanceof Player)) {
+            return;
+        }
+        AFKPlusPlayer afkp = plugin.getPlayer((Player) hE);
+        if (afkp.isAFK()) {
+            e.setCancelled(true);
+            afkp.interact();
         }
     }
 
@@ -86,7 +100,11 @@ class AFKPlusListeners implements Listener {
     @EventHandler
     public void onPlayerInteract(PlayerInteractEvent e) {
         if (plugin.getConfig().getBoolean("EnabledDetections.Interact")) {
-            plugin.getPlayer(e.getPlayer()).interact();
+            AFKPlusPlayer afkp = plugin.getPlayer(e.getPlayer());
+            if (afkp.isAFK()) {
+                e.setCancelled(true);
+            }
+            afkp.interact();
         }
     }
 
@@ -113,50 +131,50 @@ class AFKPlusListeners implements Listener {
      *
      * @return The AFK machine detection task being run by Bukkit
      */
-    public BukkitTask getAfkMachineDetectionTask() {
-        return AfkMachineDetectionTask;
-    }
+//    public BukkitTask getAfkMachineDetectionTask() {
+//        return AfkMachineDetectionTask;
+//    }
 
-    private void startRunnable() {
-        AfkMachineDetectionTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
-            playerLocations.clear();
-            //Save all players current locations
-            for (Player p : Bukkit.getOnlinePlayers()) {
-                playerLocations.put(p.getUniqueId(), p.getLocation());
-            }
-            Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
-                //Go through each saved location and see if the player is moving
-                for (UUID uuid : playerLocations.keySet()) {
-                    if (Bukkit.getOfflinePlayer(uuid).isOnline()) {
-                        Location savedLoc = playerLocations.get(uuid);
-                        Location loc = Bukkit.getPlayer(uuid).getLocation();
-                        //Check if the player is moving in both rotation and transform
-                        boolean inactive = false;
-                        if (plugin.getConfig().getBoolean("AggressiveAFKDetection")) {
-                            //If aggressive is enabled we want to check if the player isn't moving in one or both
-                            if (checkRotation(savedLoc, loc))
-                                inactive = true;
-                            if (checkTransform(savedLoc, loc))
-                                inactive = true;
-                        } else {
-                            //Without aggressive enabled we only want one to be true,
-                            //if both are false then inactive will be false
-                            //This is achieved by converting true to 1 and false to 0 and summing them
-                            //Inactive is only true when only one of the booleans is true
-                            if ((checkRotation(savedLoc, loc) ? 1 : 0) + (checkTransform(savedLoc, loc) ? 1 : 0) == 1) {
-                                inactive = true;
-                            }
-                        }
-                        //This is sent to the player object, if the player is deemed to not be moving they will not
-                        //be able to reset their interact timer. This wil force them into AFK even
-                        //if they are triggering move events
-                        plugin.getPlayer(uuid).setInactive(inactive);
-
-                    }
-                }
-            }, 20 * 2);
-        }, 20 * 5, 20 * 5);
-    }
+//    private void startRunnable() {
+//        AfkMachineDetectionTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
+//            playerLocations.clear();
+//            //Save all players current locations
+//            for (Player p : Bukkit.getOnlinePlayers()) {
+//                playerLocations.put(p.getUniqueId(), p.getLocation());
+//            }
+//            Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
+//                //Go through each saved location and see if the player is moving
+//                for (UUID uuid : playerLocations.keySet()) {
+//                    if (Bukkit.getOfflinePlayer(uuid).isOnline()) {
+//                        Location savedLoc = playerLocations.get(uuid);
+//                        Location loc = Bukkit.getPlayer(uuid).getLocation();
+//                        //Check if the player is moving in both rotation and transform
+//                        boolean inactive = false;
+//                        if (plugin.getConfig().getBoolean("AggressiveAFKDetection")) {
+//                            //If aggressive is enabled we want to check if the player isn't moving in one or both
+//                            if (checkRotation(savedLoc, loc))
+//                                inactive = true;
+//                            if (checkTransform(savedLoc, loc))
+//                                inactive = true;
+//                        } else {
+//                            //Without aggressive enabled we only want one to be true,
+//                            //if both are false then inactive will be false
+//                            //This is achieved by converting true to 1 and false to 0 and summing them
+//                            //Inactive is only true when only one of the booleans is true
+//                            if ((checkRotation(savedLoc, loc) ? 1 : 0) + (checkTransform(savedLoc, loc) ? 1 : 0) == 1) {
+//                                inactive = true;
+//                            }
+//                        }
+//                        //This is sent to the player object, if the player is deemed to not be moving they will not
+//                        //be able to reset their interact timer. This wil force them into AFK even
+//                        //if they are triggering move events
+//                        plugin.getPlayer(uuid).setInactive(inactive);
+//
+//                    }
+//                }
+//            }, 20 * 2);
+//        }, 20 * 5, 20 * 5);
+//    }
 
     private boolean checkRotation(Location oldLoc, Location newLoc) {
         boolean yaw = oldLoc.getYaw() == newLoc.getYaw();

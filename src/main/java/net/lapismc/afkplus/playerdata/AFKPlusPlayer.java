@@ -28,6 +28,8 @@ import org.bukkit.metadata.MetadataValue;
 
 import java.util.Date;
 import java.util.UUID;
+import org.bukkit.GameMode;
+import org.bukkit.scoreboard.Team;
 
 /**
  * This class can be used to start, stop and check AFK as well as the values used to start and stop AFK
@@ -41,16 +43,20 @@ public class AFKPlusPlayer {
     private Long lastInteract;
     private Long afkStart;
     private boolean isAFK;
-    private boolean isInactive;
+//    private boolean isInactive;
     private boolean isWarned;
+    private GameMode previousGameMode;
+    private boolean disabled;
 
     public AFKPlusPlayer(AFKPlus plugin, UUID uuid) {
         this.plugin = plugin;
         this.uuid = uuid;
         isAFK = false;
-        isInactive = false;
+//        isInactive = false;
         isWarned = false;
         lastInteract = System.currentTimeMillis();
+        previousGameMode = null;
+        disabled = false;
     }
 
     /**
@@ -77,9 +83,10 @@ public class AFKPlusPlayer {
      *
      * @param isInactive true to enable blocking of {@link #interact()}
      */
-    public void setInactive(boolean isInactive) {
-        this.isInactive = isInactive;
-    }
+//    public void setInactive(boolean isInactive) {
+//        System.out.println("setInactive: " + isInactive);
+//        this.isInactive = isInactive;
+//    }
 
     /**
      * Check if the player is permitted to do something
@@ -163,6 +170,9 @@ public class AFKPlusPlayer {
      * Silently starts AFK for this player
      */
     public void forceStartAFK() {
+        //Set the player's gamemode to creative while AFK.
+        this.enableSafeGameMode();
+        
         //Record the time that the player was set AFK
         afkStart = System.currentTimeMillis();
         //Set the player as AFK
@@ -199,12 +209,14 @@ public class AFKPlusPlayer {
      * Silently stops AFK for this player
      */
     public void forceStopAFK() {
+        //Disable creative mode, and go back to previous game mode before AFK.
+        this.disableSafeGameMode();
         //Reset warning
         isWarned = false;
         //Set player as no longer AFK
         isAFK = false;
         //Disable inactivity to allow the interact to register
-        isInactive = false;
+//        isInactive = false;
         //Interact to update the last interact value
         interact();
     }
@@ -263,8 +275,8 @@ public class AFKPlusPlayer {
     public void interact() {
         //Dont allow interact when the player is inactive
         //Inactive is decided by the listener class checking location data
-        if (isInactive)
-            return;
+//        if (isInactive)
+//            return;
         lastInteract = System.currentTimeMillis();
         if (isAFK)
             stopAFK();
@@ -334,4 +346,78 @@ public class AFKPlusPlayer {
             }
         };
     }
+    
+    private void enableSafeGameMode() {
+        Player p = Bukkit.getPlayer(this.getUUID());
+        if (p == null) {
+            return;
+        }
+        
+        if (this.disabled) {
+//            Bukkit.getServer().broadcastMessage(this.getName() + " has disabled SafeAFK");
+            return;
+        }
+        
+        p.closeInventory();
+        
+        if (p.getGameMode() == GameMode.SURVIVAL || p.getGameMode() == GameMode.ADVENTURE) {
+            this.setPreviousGameMode(p.getGameMode());
+            p.setGameMode(GameMode.CREATIVE);
+        }
+        
+        Bukkit.getScoreboardManager().getMainScoreboard().getTeam("afk_plugin")
+                .addEntry(this.getName());
+    }
+    
+    private void disableSafeGameMode() {
+        Player p = Bukkit.getPlayer(this.getUUID());
+        if (p == null) {
+            return;
+        }
+        if (this.getPreviousGameMode() != null) {
+//            Bukkit.getServer().broadcastMessage("Previous game mode was " + this.getPreviousGameMode().name() + " for " + this.getName());
+            p.setGameMode(this.getPreviousGameMode());
+            this.setPreviousGameMode(null);
+        } else {
+//            Bukkit.getServer().broadcastMessage("Previous game mode was not set for " + this.getName());
+        }
+//        Bukkit.getScoreboardManager().getMainScoreboard().getTeam("not_afk_plugin")
+//                .addEntry(this.getName());
+        try {
+            Bukkit.getScoreboardManager().getMainScoreboard().registerNewTeam(this.getName()).setOption(Team.Option.COLLISION_RULE, Team.OptionStatus.ALWAYS);
+//            Bukkit.getServer().broadcastMessage("Created new team " + this.getName() + " with collision rule ALWAYS");
+        } catch (IllegalArgumentException e) {
+            // Team already exists. Do nothing
+//            Bukkit.getServer().broadcastMessage("Team " + this.getName() + " already exists.");
+        }
+        Bukkit.getScoreboardManager().getMainScoreboard().getTeam(this.getName())
+                .addEntry(this.getName());
+//        Bukkit.getServer().broadcastMessage("Add " + this.getName() + " to team " + this.getName());
+    }
+    
+    /**
+     * Getter for previousGameMode
+     * @return GameMode
+     */
+    public GameMode getPreviousGameMode() {
+        return this.previousGameMode;
+    }
+    
+    /**
+     * Setter for previousGameMode
+     * @param previousGameMode
+     */
+    public void setPreviousGameMode(GameMode previousGameMode) {
+        this.previousGameMode = previousGameMode;
+    }
+
+    public boolean isDisabled() {
+        return disabled;
+    }
+
+    public void setDisabled(boolean disabled) {
+        this.disabled = disabled;
+    }
+    
+    
 }
