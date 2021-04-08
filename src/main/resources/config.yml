@@ -1,16 +1,32 @@
-ConfigVersion: 4
+ConfigVersion: 7
 
 #Should the plugin auto download and install new versions when they are available
 UpdateDownload: true
 
-#Its expected that the action will stop the player from being AFK or remove them from the server
-#Failure to do this wil result in the command being run every second
-Action: "kick [PLAYER] You were AFK for too long!"
+#Leave a command blank if you dont wish to use one, the commands are run during the process of setting the player to AFK
+#this may cause issues if you attempt to teleport or move the player etc.
+#The action command must either make the player no longer AFK or remove them from the server
+Commands:
+  Action: "kick [PLAYER] You were AFK for too long!"
+  AFKStart: ""
+  AFKStop: ""
+  Warn: ""
+
+#The server must have this many player before the action command will be run
+#When the server hits this limit the players who have been AFK longer than the normal action time will be kicked
+#Its also recommended that you edit the warning message to tell players that they will be kicked when the server reaches x players
+#Setting to 0 means that players will always be acted upon when they reach their time to action
+ActionPlayerRequirement: 0
 
 #The sound to be played when a player is warned
 #Set to blank if you don't want a sound e.g. ""
-#A list of sounds for the latest spigot version is available at https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/Sound.html
+#A list of sounds for the latest spigot version is available at
+#https://github.com/CryptoMorin/XSeries/blob/master/src/main/java/com/cryptomorin/xseries/XSound.java#L64
 WarningSound: "ENTITY_PLAYER_LEVELUP"
+
+#The sound to be played to a player when they become AFK
+#Set to blank if you don't want a sound
+AFKStartSound: "BLOCK_ANVIL_HIT"
 
 #A player will be set as AFK if they don't interact with the world
 #What should be counted as an interaction?
@@ -18,7 +34,9 @@ WarningSound: "ENTITY_PLAYER_LEVELUP"
 EnabledDetections:
   #Sending chat messages
   Chat: true
-  #Moving, this includes looking around
+  #The players head/body rotating in place
+  Look: true
+  #Moving in the x,y,z directions
   Move: true
   #Attacking entities
   Attack: true
@@ -31,9 +49,25 @@ EnabledDetections:
   #Breaking blocks
   BlockBreak: true
 
+Protections:
+  #When enabled AFK players will not be able to move in the x and z directions while AFK.
+  #This stops them being pushed out of AFK by players bumping into them
+  #This is implemented better in AFKPlusPrefix, but that addon is not compatible with all servers
+  #so this is a different implementation of the fix
+  Bump: false
+  #When enabled AFK players will be invincible to attacks from other players
+  HurtByPlayer: false
+  #When enabled AFK players will be invincible to attacks from mobs
+  HurtByMob: true
+  #Same as HurtByPlayer but stops any non-player damage
+  HurtByOther: true
+  #When enabled, mobs will not spawn if the AFK player is the cause of the spawning
+  #This only applies to natural and spawner spawning
+  MobSpawning: true
+
 #Who should receive messages when players AFK status changes
 #Self = the player who's status has changed
-#Vanish = if the player who's status has changed is AFK
+#Vanish = if the player who's status has changed is vanished
 Broadcast:
   Console: true
   OtherPlayers: true

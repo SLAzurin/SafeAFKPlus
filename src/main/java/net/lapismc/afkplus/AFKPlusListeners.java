@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Benjamin Martin
+ * Copyright 2021 Benjamin Martin
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,14 +17,21 @@
 package net.lapismc.afkplus;
 
 import net.lapismc.afkplus.playerdata.AFKPlusPlayer;
+import net.lapismc.afkplus.api.AFKMachineDetectEvent;
+import net.lapismc.afkplus.util.EntitySpawnManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.entity.Arrow;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.*;
 
 import org.bukkit.entity.HumanEntity;
@@ -33,12 +40,13 @@ import org.bukkit.event.inventory.InventoryCreativeEvent;
 class AFKPlusListeners implements Listener {
 
     private final AFKPlus plugin;
-//    private final HashMap<UUID, Location> playerLocations = new HashMap<>();
-//    private BukkitTask AfkMachineDetectionTask;
+    // private final HashMap<UUID, Location> playerLocations = new HashMap<>();
+    // private BukkitTask AfkMachineDetectionTask;
+    private final EntitySpawnManager spawnManager;
 
     AFKPlusListeners(AFKPlus plugin) {
         this.plugin = plugin;
-//        startRunnable();
+        spawnManager = new EntitySpawnManager(plugin);
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
@@ -75,19 +83,110 @@ class AFKPlusListeners implements Listener {
 
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent e) {
-        if (plugin.getConfig().getBoolean("EnabledDetections.Move")) {
+        //Check if the player has looked and/or moved
+        Location from = e.getFrom();
+        Location to = e.getTo();
+        boolean look = to.getPitch() != from.getPitch() || to.getYaw() != from.getYaw();
+        boolean move = to.getX() != from.getX() || to.getY() != from.getY() || to.getZ() != from.getZ();
+
+        //Check if bump protection is enabled and the player has only moved but not looked
+        boolean isBumpProtected = isMovementCausedByMobBump(e.getPlayer());
+        if (isBumpProtected && plugin.getPlayer(e.getPlayer()).isAFK() && (move && !look)) {
+            //Make sure they haven't moved up in the Y direction (this allows jumping but not falling)
+            if (to.getY() <= from.getY()) {
+                //The players has only moved in the X or Z directions so we cancel the event since it could be a bump
+                e.setCancelled(true);
+                return;
+            }
+        }
+
+        //Only interact if the player performed the action and the detection is enabled for it
+        if ((look && plugin.getConfig().getBoolean("EnabledDetections.Look")) ||
+                (move && plugin.getConfig().getBoolean("EnabledDetections.Move"))) {
             plugin.getPlayer(e.getPlayer()).interact();
         }
     }
 
-    @EventHandler
-    public void onPlayerAttack(EntityDamageByEntityEvent e) {
-        if (plugin.getConfig().getBoolean("EnabledDetections.Attack")) {
-            if (e.getDamager() instanceof Player) {
-                Player p = (Player) e.getDamager();
-                plugin.getPlayer(p).interact();
+    private boolean isMovementCausedByMobBump(Player p) {
+        //How close does the mob need to be to the player before they are considered to be "bumping" the player
+        double requiredDistance = 0.5;
+
+        //If both bump and hurt by mob protections are disabled then we can just ignore this
+        if (!(plugin.getConfig().getBoolean("Protections.Bump") || plugin.getConfig().getBoolean("Protections.HurtByMob")))
+            return false;
+
+        //Check if the player has been attacked by a mob in bump range
+        boolean playerAttacked = false;
+        EntityDamageEvent event = p.getLastDamageCause();
+        Entity damager = null;
+        if (event instanceof EntityDamageByEntityEvent) {
+            damager = ((EntityDamageByEntityEvent) event).getDamager();
+        }
+
+        boolean isMobClose = false;
+        //Find all entities within the required range
+        for (Entity e : p.getNearbyEntities(requiredDistance, requiredDistance, requiredDistance)) {
+            if (e instanceof Monster) {
+                if (e.equals(damager)) {
+                    playerAttacked = true;
+                }
+                isMobClose = true;
+                break;
             }
         }
+        //If bump is enabled and the player was bumped by a mob then we report as a bump
+        if (plugin.getConfig().getBoolean("Protections.Bump") && isMobClose)
+            return true;
+        //Report as bump is mob protection is on and they were attacked or a mob is close
+        return plugin.getConfig().getBoolean("Protections.HurtByMob") && (playerAttacked || isMobClose);
+    }
+
+    @EventHandler
+    public void onEntityDamage(EntityDamageByEntityEvent e) {
+        //Check if the damager is a player or an arrow shot by a player
+        boolean damageCausedByPlayer = false;
+        if (e.getDamager() instanceof Player)
+            damageCausedByPlayer = true;
+        if (e.getDamager() instanceof Arrow)
+            damageCausedByPlayer = ((Arrow) e.getDamager()).getShooter() instanceof Player;
+
+        //Check if the attacked is a player and if we should be protecting them
+        if (e.getEntity() instanceof Player && plugin.getPlayer((Player) e.getEntity()).isAFK()) {
+            if (plugin.getConfig().getBoolean("Protections.HurtByPlayer") && damageCausedByPlayer) {
+                e.setCancelled(true);
+            }
+            if (plugin.getConfig().getBoolean("Protections.HurtByMob") && !damageCausedByPlayer) {
+                e.setCancelled(true);
+            }
+        }
+
+        //Run the attack detection if the attacker is a player
+        if (plugin.getConfig().getBoolean("EnabledDetections.Attack") && e.getDamager() instanceof Player) {
+            Player p = (Player) e.getDamager();
+            plugin.getPlayer(p).interact();
+        }
+    }
+
+    @EventHandler
+    public void onPlayerHurt(EntityDamageEvent e) {
+        if ((e instanceof EntityDamageByEntityEvent) || !(e.getEntity() instanceof Player))
+            return;
+        //We should have a player that is being damaged by something other than en entity
+        AFKPlusPlayer p = plugin.getPlayer(e.getEntity().getUniqueId());
+        if (plugin.getConfig().getBoolean("Protections.HurtByOther") && p.isAFK())
+            e.setCancelled(true);
+    }
+
+    @EventHandler
+    public void onMonsterSpawn(CreatureSpawnEvent e) {
+        if (!plugin.getConfig().getBoolean("Protections.MobSpawning"))
+            return;
+        //TODO: Test this
+        if (!(e.getEntity() instanceof Monster))
+            return;
+        boolean shouldSpawn = spawnManager.shouldSpawn(e.getLocation(), e.getSpawnReason());
+        if (!shouldSpawn)
+            e.setCancelled(false);
     }
 
     @EventHandler
@@ -176,11 +275,11 @@ class AFKPlusListeners implements Listener {
 //        }, 20 * 5, 20 * 5);
 //    }
 
-    private boolean checkRotation(Location oldLoc, Location newLoc) {
-        boolean yaw = oldLoc.getYaw() == newLoc.getYaw();
-        boolean pitch = oldLoc.getPitch() == newLoc.getPitch();
-        return yaw && pitch;
-    }
+    // private boolean checkRotation(Location oldLoc, Location newLoc) {
+    //     boolean yaw = oldLoc.getYaw() == newLoc.getYaw();
+    //     boolean pitch = oldLoc.getPitch() == newLoc.getPitch();
+    //     return yaw && pitch;
+    // }
 
 
     private boolean checkTransform(Location oldLoc, Location newLoc) {

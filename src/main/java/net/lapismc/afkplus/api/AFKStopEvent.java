@@ -17,7 +17,6 @@
 package net.lapismc.afkplus.api;
 
 import net.lapismc.afkplus.playerdata.AFKPlusPlayer;
-import net.lapismc.lapiscore.events.LapisCoreCancellableEvent;
 
 /**
  * A cancellable event to notify plugins when a player is exiting AFK
@@ -25,12 +24,20 @@ import net.lapismc.lapiscore.events.LapisCoreCancellableEvent;
  * If this was caused by an event it is likely to happen again very soon
  */
 @SuppressWarnings("unused")
-public class AFKStopEvent extends LapisCoreCancellableEvent {
+public class AFKStopEvent extends AFKCommandEvent {
 
     private final AFKPlusPlayer player;
+    private String broadcastMessage;
 
-    public AFKStopEvent(AFKPlusPlayer player) {
+    /**
+     * @param player           The player being set as AFK
+     * @param command          The command to be run after the event has finished
+     * @param broadcastMessage The message that will be broadcast if the event succeeds
+     */
+    public AFKStopEvent(AFKPlusPlayer player, String command, String broadcastMessage) {
+        super(command);
         this.player = player;
+        this.broadcastMessage = broadcastMessage;
     }
 
     /**
@@ -40,5 +47,23 @@ public class AFKStopEvent extends LapisCoreCancellableEvent {
      */
     public AFKPlusPlayer getPlayer() {
         return player;
+    }
+
+    /**
+     * Get the message that will be broadcast if the event succeeds
+     *
+     * @return The message to be broadcast
+     */
+    public String getBroadcastMessage() {
+        return broadcastMessage;
+    }
+
+    /**
+     * Set the message that will be broadcast if the event succeeds
+     *
+     * @param broadcastMessage a String with color codes already parsed
+     */
+    public void setBroadcastMessage(String broadcastMessage) {
+        this.broadcastMessage = broadcastMessage;
     }
 }

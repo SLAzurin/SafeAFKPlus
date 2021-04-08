@@ -17,20 +17,29 @@
 package net.lapismc.afkplus.api;
 
 import net.lapismc.afkplus.playerdata.AFKPlusPlayer;
-import net.lapismc.lapiscore.events.LapisCoreCancellableEvent;
 
 /**
  * A cancellable event to notify plugins when a player becomes AFK
  * Cancelling this event is silent and will simply stop it from happening
  * If the player is still not active it is likely that the event will be fired in 1 seconds time
+ * The command run on the player after the event fires can be changed
+ * this command will not be executed if the event is canceled
  */
 @SuppressWarnings("unused")
-public class AFKStartEvent extends LapisCoreCancellableEvent {
+public class AFKStartEvent extends AFKCommandEvent {
 
-    private AFKPlusPlayer player;
+    private final AFKPlusPlayer player;
+    private String broadcastMessage;
 
-    public AFKStartEvent(AFKPlusPlayer player) {
+    /**
+     * @param player           The player being set as AFK
+     * @param command          The command to be run after the event has finished
+     * @param broadcastMessage The message that will be broadcast if the event succeeds
+     */
+    public AFKStartEvent(AFKPlusPlayer player, String command, String broadcastMessage) {
+        super(command);
         this.player = player;
+        this.broadcastMessage = broadcastMessage;
     }
 
     /**
@@ -40,5 +49,23 @@ public class AFKStartEvent extends LapisCoreCancellableEvent {
      */
     public AFKPlusPlayer getPlayer() {
         return player;
+    }
+
+    /**
+     * Get the message that will be broadcast if the event succeeds
+     *
+     * @return The message to be broadcast
+     */
+    public String getBroadcastMessage() {
+        return broadcastMessage;
+    }
+
+    /**
+     * Set the message that will be broadcast if the event succeeds
+     *
+     * @param broadcastMessage a String with color codes already parsed
+     */
+    public void setBroadcastMessage(String broadcastMessage) {
+        this.broadcastMessage = broadcastMessage;
     }
 }

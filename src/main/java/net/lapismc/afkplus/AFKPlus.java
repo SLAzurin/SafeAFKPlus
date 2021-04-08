@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Benjamin Martin
+ * Copyright 2021 Benjamin Martin
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ public final class AFKPlus extends LapisCorePlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
-        registerConfiguration(new LapisCoreConfiguration(this, 4, 2));
+        registerConfiguration(new LapisCoreConfiguration(this, 7, 2));
         registerPermissions(new AFKPlusPermissions(this));
         update();
         fileWatcher = new LapisCoreFileWatcher(this);
@@ -73,7 +73,7 @@ public final class AFKPlus extends LapisCorePlugin {
         new AFKPlusAPI(this);
         new AFKPlusPlayerAPI(this);
         new Metrics(this);
-        repeatingTask = Bukkit.getScheduler().runTaskTimerAsynchronously(this, runRepeatingTasks(), 20, 20);
+        repeatingTask = Bukkit.getScheduler().runTaskTimerAsynchronously(this, getRepeatingTasks(), 20, 20);
         getLogger().info(getName() + " v." + getDescription().getVersion() + " has been enabled!");
         
         
@@ -89,6 +89,8 @@ public final class AFKPlus extends LapisCorePlugin {
         repeatingTask.cancel();
         //Also stop the AFK Machine detection task
 //        listeners.getAfkMachineDetectionTask().cancel();
+        //Safely handle the stopping of AFKPlus in regards to player data
+        disposeOfPlayers();
         getLogger().info(getName() + " has been disabled!");
     }
 
@@ -105,18 +107,27 @@ public final class AFKPlus extends LapisCorePlugin {
 
     private void update() {
         updater = new LapisUpdater(this, "AFKPlus", "SLAzurin", "SafeAFKPlus", "master");
-        if (updater.checkUpdate()) {
-            if (getConfig().getBoolean("UpdateDownload")) {
-                updater.downloadUpdate();
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            if (updater.checkUpdate()) {
+                if (getConfig().getBoolean("UpdateDownload")) {
+                    updater.downloadUpdate();
+                } else {
+                    getLogger().info(config.getMessage("Updater.UpdateFound"));
+                }
             } else {
-                getLogger().info(config.getMessage("Updater.UpdateFound"));
+                getLogger().info(config.getMessage("Updater.NoUpdate"));
             }
-        } else {
-            getLogger().info(config.getMessage("Updater.NoUpdate"));
+        });
+    }
+
+    private void disposeOfPlayers() {
+        //Stop all AFK sessions for the sake of AFK time statistics
+        for (AFKPlusPlayer p : players.values()) {
+            p.forceStopAFK();
         }
     }
 
-    private Runnable runRepeatingTasks() {
+    private Runnable getRepeatingTasks() {
         return () -> {
             for (AFKPlusPlayer player : players.values()) {
                 player.getRepeatingTask().run();
